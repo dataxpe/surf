@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/headzoo/surf/errors"
-	"github.com/headzoo/surf/jar"
+	"github.com/jabbahotep/surf/errors"
+	"github.com/jabbahotep/surf/jar"
 )
 
 // Attribute represents a Browser capability.
@@ -68,6 +68,9 @@ type Browsable interface {
 
 	// SetTransport sets the http library transport mechanism for each request.
 	SetTransport(t *http.Transport)
+
+	// SetTransport sets the http library transport mechanism for each request.
+	GetTransport(t *http.Transport)
 
 	// AddRequestHeader adds a header the browser sends with each request.
 	AddRequestHeader(name, value string)
@@ -461,6 +464,11 @@ func (bow *Browser) SetHeadersJar(h http.Header) {
 // SetTransport sets the http library transport mechanism for each request.
 func (bow *Browser) SetTransport(t *http.Transport) {
 	bow.transport = t
+}
+
+// GetTransport gets the http library transport mechanism.
+func (bow *Browser) GetTransport() *http.Transport{
+	return bow.transport
 }
 
 // AddRequestHeader sets a header the browser sends with each request.

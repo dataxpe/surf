@@ -2,7 +2,7 @@ package browser
 
 import (
 	"github.com/PuerkitoBio/goquery"
-	"github.com/headzoo/surf/errors"
+	"github.com/jabbahotep/surf/errors"
 	"net/url"
 	"strings"
 )

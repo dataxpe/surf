@@ -2,8 +2,8 @@ package jar
 
 import (
 	"encoding/json"
-	"github.com/headzoo/surf/errors"
-	"github.com/headzoo/surf/util"
+	"github.com/jabbahotep/surf/errors"
+	"github.com/jabbahotep/surf/util"
 	"io/ioutil"
 	"os"
 )
