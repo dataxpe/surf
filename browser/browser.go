@@ -60,6 +60,9 @@ type Browsable interface {
 	// SetCookieJar is used to set the cookie jar the browser uses.
 	SetCookieJar(cj http.CookieJar)
 
+	// GetCookieJar is used to get the cookie jar the browser uses.
+	GetCookieJar()http.CookieJar
+
 	// SetHistoryJar is used to set the history jar the browser uses.
 	SetHistoryJar(hj jar.History)
 
@@ -70,7 +73,7 @@ type Browsable interface {
 	SetTransport(t *http.Transport)
 
 	// SetTransport sets the http library transport mechanism for each request.
-	GetTransport(t *http.Transport)
+	GetTransport()http.Transport
 
 	// AddRequestHeader adds a header the browser sends with each request.
 	AddRequestHeader(name, value string)
@@ -431,6 +434,11 @@ func (bow *Browser) SetCookieJar(cj http.CookieJar) {
 	bow.cookies = cj
 }
 
+// GetCookieJar is used to get the cookie jar the browser uses.
+func (bow *Browser) GetCookieJar() http.CookieJar {
+	return bow.cookies
+}
+
 // SetUserAgent sets the user agent.
 func (bow *Browser) SetUserAgent(userAgent string) {
 	bow.userAgent = userAgent
@@ -467,8 +475,8 @@ func (bow *Browser) SetTransport(t *http.Transport) {
 }
 
 // GetTransport gets the http library transport mechanism.
-func (bow *Browser) GetTransport() *http.Transport{
-	return bow.transport
+func (bow *Browser) GetTransport() http.Transport{
+	return *bow.transport
 }
 
 // AddRequestHeader sets a header the browser sends with each request.
