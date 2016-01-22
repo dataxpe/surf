@@ -73,7 +73,7 @@ type Browsable interface {
 	SetTransport(t *http.Transport)
 
 	// SetTransport sets the http library transport mechanism for each request.
-	GetTransport()http.Transport
+	GetTransport() *http.Transport
 
 	// AddRequestHeader adds a header the browser sends with each request.
 	AddRequestHeader(name, value string)
@@ -475,8 +475,8 @@ func (bow *Browser) SetTransport(t *http.Transport) {
 }
 
 // GetTransport gets the http library transport mechanism.
-func (bow *Browser) GetTransport() http.Transport{
-	return *bow.transport
+func (bow *Browser) GetTransport() *http.Transport{
+	return bow.transport
 }
 
 // AddRequestHeader sets a header the browser sends with each request.

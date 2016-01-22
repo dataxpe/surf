@@ -5,6 +5,7 @@ import (
 	"github.com/jabbahotep/surf/agent"
 	"github.com/jabbahotep/surf/browser"
 	"github.com/jabbahotep/surf/jar"
+	"net/http"
 )
 
 var (
@@ -30,6 +31,7 @@ func NewBrowser() *browser.Browser {
 	bow.SetBookmarksJar(jar.NewMemoryBookmarks())
 	bow.SetHistoryJar(jar.NewMemoryHistory())
 	bow.SetHeadersJar(jar.NewMemoryHeaders())
+	bow.SetTransport(&http.Transport{})
 	bow.SetAttributes(browser.AttributeMap{
 		browser.SendReferer:         DefaultSendReferer,
 		browser.MetaRefreshHandling: DefaultMetaRefreshHandling,
