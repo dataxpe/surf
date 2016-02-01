@@ -12,7 +12,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
 	"github.com/PuerkitoBio/goquery"
 	"github.com/jabbahotep/surf/errors"
 	"github.com/jabbahotep/surf/jar"
@@ -33,6 +32,7 @@ const (
 
 	// FollowRedirectsAttribute instructs a Browser to follow Location headers.
 	FollowRedirects
+
 )
 
 // InitialAssetsArraySize is the initial size when allocating a slice of page
@@ -161,6 +161,12 @@ type Browsable interface {
 
 	// Find returns the dom selections matching the given expression.
 	Find(expr string) *goquery.Selection
+
+	// Register pluggable converter
+	SetConverter(content_type string, f func([]byte)[]byte)
+
+	// Unregister pluggable converter
+	ClearConverter(content_type string)
 }
 
 // Default is the default Browser implementation.
@@ -195,6 +201,20 @@ type Browser struct {
 
 	// body of the current page.
 	body []byte
+
+	// pluggable converters
+	pluggable_converters map[string]func([]byte)[]byte
+
+}
+
+// Register pluggable converter
+func (bow *Browser) SetConverter(content_type string, f func([]byte)[]byte) {
+    bow.pluggable_converters[content_type] = f
+}
+
+// Unregister pluggable converter
+func (bow *Browser) ClearConverter(content_type string) {
+    bow.pluggable_converters[content_type] = nil
 }
 
 // Open requests the given URL using the GET method.
@@ -541,7 +561,7 @@ func (bow *Browser) ResponseHeaders() http.Header {
 
 // Body returns the page body as a string of html.
 func (bow *Browser) Body() string {
-	body, _ := bow.state.Dom.Find("body").Html()
+	body, _ := bow.state.Dom.First().Html()
 	return body
 }
 
@@ -638,6 +658,9 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 		return err
 	}
 
+    content_type := resp.Header.Get("Content-Type")
+	bow.contentConversion(content_type)
+
 	buff := bytes.NewBuffer(bow.body)
 	dom, err := goquery.NewDocumentFromReader(buff)
 	if err != nil {
@@ -718,4 +741,11 @@ func isContentTypeHtml(res *http.Response) bool {
 		return ct == "" || strings.Contains(ct, "text/html")
 	}
 	return false
+}
+
+// Manipulate contents with specific content-type
+func (bow *Browser) contentConversion(content_type string) {
+    if bow.pluggable_converters[content_type] != nil {
+        bow.body = bow.pluggable_converters[content_type](bow.body)
+    }
 }
