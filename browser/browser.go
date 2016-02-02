@@ -207,6 +207,11 @@ type Browser struct {
 
 }
 
+// Init pluggable map
+func (bow *Browser) InitConverters() {
+    bow.pluggable_converters = make(map[string]func([]byte)[]byte)
+}
+
 // Register pluggable converter
 func (bow *Browser) SetConverter(content_type string, f func([]byte)[]byte) {
     bow.pluggable_converters[content_type] = f
