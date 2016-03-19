@@ -15,6 +15,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/jabbahotep/surf/errors"
 	"github.com/jabbahotep/surf/jar"
+    "regexp"
 )
 
 // Attribute represents a Browser capability.
@@ -750,7 +751,10 @@ func isContentTypeHtml(res *http.Response) bool {
 
 // Manipulate contents with specific content-type
 func (bow *Browser) contentConversion(content_type string) {
-    if bow.pluggable_converters[content_type] != nil {
-        bow.body = bow.pluggable_converters[content_type](bow.body)
+    re := regexp.MustCompile("^([A-z\\/]+)")
+    match := re.FindAllStringSubmatch(content_type, -1)[0][1]
+    if bow.pluggable_converters[match] != nil {
+        bow.body = bow.pluggable_converters[match](bow.body)
+        fmt.Printf("Converted: %v", bow.body)
     }
 }

@@ -19,26 +19,42 @@ type Submittable interface {
 
 // Form is the default form element.
 type Form struct {
-	bow       Browsable
-	selection *goquery.Selection
-	method    string
-	action    string
-	fields    url.Values
-	buttons   url.Values
+	bow         Browsable
+	selection   *goquery.Selection
+	method      string
+	action      string
+	fields      []*Field
+    checkboxes  []*Checkbox
+	buttons     []*Button
 }
+type Checkbox struct {
+	name        string
+	value       string
+    checked     bool
+}
+type Field struct {
+	name        string
+	value       string
+}
+type Button struct {
+	name        string
+	value       string
+}
+
 
 // NewForm creates and returns a *Form type.
 func NewForm(bow Browsable, s *goquery.Selection) *Form {
-	fields, buttons := serializeForm(s)
+	fields, checkboxes, buttons := serializeForm(s)
 	method, action := formAttributes(bow, s)
 
 	return &Form{
-		bow:       bow,
-		selection: s,
-		method:    method,
-		action:    action,
-		fields:    fields,
-		buttons:   buttons,
+		bow:        bow,
+		selection:  s,
+		method:     method,
+        action:     action,
+		fields:     fields,
+		checkboxes: checkboxes,
+		buttons:    buttons,
 	}
 }
 
@@ -55,8 +71,24 @@ func (f *Form) Action() string {
 
 // Input sets the value of a form field.
 func (f *Form) Input(name, value string) error {
-	if _, ok := f.fields[name]; ok {
-		f.fields.Set(name, value)
+    found := false
+    for _, f := range f.fields {
+        if f.name == name {
+            f.value = value
+            found = true
+        }
+    }
+    for _, c := range f.checkboxes {
+        if c.name == name && c.value == value {
+            if c.checked {
+                c.checked = false
+            } else {
+                c.checked = true
+            }
+            found = true
+        }
+    }
+	if found {
 		return nil
 	}
 	return errors.NewElementNotFound(
@@ -68,8 +100,8 @@ func (f *Form) Input(name, value string) error {
 // any button when the form does not contain any buttons.
 func (f *Form) Submit() error {
 	if len(f.buttons) > 0 {
-		for name := range f.buttons {
-			return f.Click(name)
+		for _, b := range f.buttons {
+			return f.Click(b.name)
 		}
 	}
 	return f.send("", "")
@@ -77,11 +109,22 @@ func (f *Form) Submit() error {
 
 // Click submits the form by clicking the button with the given name.
 func (f *Form) Click(button string) error {
-	if _, ok := f.buttons[button]; !ok {
+    found := false
+    button_name := ""
+    button_value := ""
+    for _, b := range f.buttons {
+        if b.name == button {
+            found = true
+            button_name = b.name
+            button_value = b.value
+            break
+        }
+    }
+	if !found {
 		return errors.NewInvalidFormValue(
 			"Form does not contain a button with the name '%s'.", button)
 	}
-	return f.send(button, f.buttons[button][0])
+	return f.send(button_name, button_value)
 }
 
 // Dom returns the inner *goquery.Selection.
@@ -105,12 +148,17 @@ func (f *Form) send(buttonName, buttonValue string) error {
 	}
 	aurl = f.bow.ResolveUrl(aurl)
 
-	values := make(url.Values, len(f.fields)+1)
-	for name, vals := range f.fields {
-		values[name] = vals
+	values := make(url.Values)
+	for _, field := range f.fields {
+		values.Add(field.name, field.value)
+	}
+	for _, field := range f.checkboxes {
+        if field.checked {
+		    values.Add(field.name, field.value)
+        }
 	}
 	if buttonName != "" {
-		values.Set(buttonName, buttonValue)
+		values.Add(buttonName, buttonValue)
 	}
 
 	if strings.ToUpper(method) == "GET" {
@@ -129,38 +177,88 @@ func (f *Form) send(buttonName, buttonValue string) error {
 // Serialize converts the form fields into a url.Values type.
 // Returns two url.Value types. The first is the form field values, and the
 // second is the form button values.
-func serializeForm(sel *goquery.Selection) (url.Values, url.Values) {
-	input := sel.Find("input,button,textarea")
-	if input.Length() == 0 {
-		return url.Values{}, url.Values{}
+func serializeForm(sel *goquery.Selection) ([]*Field, []*Checkbox, []*Button) {
+	var fields []*Field
+	var checkboxes []*Checkbox
+	var buttons []*Button
+
+	input := sel.Find("input,button,textarea,select")
+	if input.Length() > 0 {
+        input.Each(func(_ int, s *goquery.Selection) {
+            name, ok := s.Attr("name")
+            if ok {
+                typ, ok := s.Attr("type")
+                if s.Is("input") && ok || s.Is("textarea") {
+                    if typ == "submit" {
+                        val, ok := s.Attr("value")
+                        if !ok {
+                            val = ""
+                        }
+                        buttons = append(buttons, &Button{
+                            name: name,
+                            value: val,
+                        })
+                    } else if typ == "radio" {
+                        val, ok := s.Attr("value")
+                        if !ok {
+                            val = ""
+                        }
+                        _, ok = s.Attr("checked")
+                        if !ok {
+                            val = ""
+                        }
+                        if val != "" {
+                            fields = append(fields, &Field{
+                                name: name,
+                                value: val,
+                            })
+                        }
+                    } else if typ == "checkbox" { 
+                        val, ok := s.Attr("value")
+                        if !ok {
+                            val = ""
+                        }
+                        checked := true
+                        _, ok = s.Attr("checked")
+                        if !ok {
+                            checked = false
+                        }
+                        checkboxes = append(checkboxes, &Checkbox{
+                            name: name,
+                            value: val,
+                            checked: checked,
+                        })
+                    } else {
+                        val, ok := s.Attr("value")
+                        if !ok {
+                            val = ""
+                        }
+                        fields = append(fields, &Field{
+                            name: name,
+                            value: val,
+                        })
+                    }
+                } else if s.Is("select") {
+                    options := s.Find("option")
+                    val := ""
+                    options.Each(func(idx int, option *goquery.Selection) {
+                        _, ok := option.Attr("selected")
+                        if idx == 0 || ok {
+                            value, ok := option.Attr("value")
+                            if ok {
+                                val = value
+                            }
+                        }
+                    })
+                    fields = append(fields, &Field{
+                        name: name,
+                        value: val,
+                    })
+                }
+            }
+        })
 	}
-
-	fields := make(url.Values)
-	buttons := make(url.Values)
-	input.Each(func(_ int, s *goquery.Selection) {
-		name, ok := s.Attr("name")
-		if ok {
-			typ, ok := s.Attr("type")
-			if ok || s.Is("textarea") {
-				if typ == "submit" {
-					val, ok := s.Attr("value")
-					if ok {
-						buttons.Add(name, val)
-					} else {
-						buttons.Add(name, "")
-					}
-				} else {
-					val, ok := s.Attr("value")
-					if !ok {
-						val = ""
-					}
-					fields.Add(name, val)
-				}
-			}
-		}
-	})
-
-	return fields, buttons
+	return fields, checkboxes, buttons
 }
 
 func formAttributes(bow Browsable, s *goquery.Selection) (string, string) {
