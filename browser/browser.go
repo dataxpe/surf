@@ -16,7 +16,8 @@ import (
 	"github.com/jabbahotep/surf/errors"
 	"github.com/jabbahotep/surf/jar"
     "regexp"
-)
+	"golang.org/x/net/html/charset"
+ )
 
 // Attribute represents a Browser capability.
 type Attribute int
@@ -67,6 +68,9 @@ type Browsable interface {
 	// SetHistoryJar is used to set the history jar the browser uses.
 	SetHistoryJar(hj jar.History)
 
+	// SetHistoryCapacity is used to set the capacity for history queue
+	SetHistoryCapacity(capacity int)
+
 	// SetHeadersJar sets the headers the browser sends with each request.
 	SetHeadersJar(h http.Header)
 
@@ -78,6 +82,12 @@ type Browsable interface {
 
 	// AddRequestHeader adds a header the browser sends with each request.
 	AddRequestHeader(name, value string)
+
+	// GetRequestHeader gets a header the browser sends with each request.
+	GetRequestHeader(name string) string
+
+	// GetAllRequestHeaders gets all headers the browser sends with each request.
+	GetAllRequestHeaders() string
 
 	// Open requests the given URL using the GET method.
 	Open(url string) error
@@ -490,6 +500,11 @@ func (bow *Browser) SetHistoryJar(hj jar.History) {
 	bow.history = hj
 }
 
+// SetHistoryCapacity is used to set the capacity for history queue
+func (bow *Browser) SetHistoryCapacity(capacity int) {
+	bow.history.SetCapacity(capacity)
+}
+
 // SetHeadersJar sets the headers the browser sends with each request.
 func (bow *Browser) SetHeadersJar(h http.Header) {
 	bow.headers = h
@@ -508,6 +523,20 @@ func (bow *Browser) GetTransport() *http.Transport{
 // AddRequestHeader sets a header the browser sends with each request.
 func (bow *Browser) AddRequestHeader(name, value string) {
 	bow.headers.Set(name, value)
+}
+
+// GetRequestHeader gets a header the browser sends with each request.
+func (bow *Browser) GetRequestHeader(name string) string {
+	return bow.headers.Get(name)
+}
+
+// GetAllRequestHeaders gets a all headers the browser sends with each request.
+func (bow *Browser) GetAllRequestHeaders() string {
+	var header string
+	for key, val := range bow.headers {
+		header += key + ": " + strings.Join(val, ";") + "\n"
+	}
+	return header
 }
 
 // DelRequestHeader deletes a header so the browser will not send it with future requests.
@@ -659,12 +688,23 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 		return err
 	}
 
-	bow.body, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
+	defer resp.Body.Close()
 
     content_type := resp.Header.Get("Content-Type")
+	fixedBody, err := charset.NewReader(resp.Body, content_type)
+
+	if err == nil {
+		bow.body, err = ioutil.ReadAll(fixedBody)
+		if err != nil {
+			return err
+		}
+	} else {
+		bow.body, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+	}
+
 	bow.contentConversion(content_type)
 
 	buff := bytes.NewBuffer(bow.body)
@@ -755,6 +795,5 @@ func (bow *Browser) contentConversion(content_type string) {
     match := re.FindAllStringSubmatch(content_type, -1)[0][1]
     if bow.pluggable_converters[match] != nil {
         bow.body = bow.pluggable_converters[match](bow.body)
-        fmt.Printf("Converted: %v", bow.body)
     }
 }

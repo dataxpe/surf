@@ -24,21 +24,22 @@ func NewHistoryState(req *http.Request, resp *http.Response, dom *goquery.Docume
 // History is a type that records browser state.
 type History interface {
 	Len() int
+	SetCapacity(int)
 	Push(p *State) int
 	Pop() *State
 	Top() *State
 }
 
 // Node holds stack values and points to the next element.
-type Node struct {
-	Value *State
-	Next  *Node
-}
+// type Node struct {
+//	Value *State
+//	Next  *Node
+// }
 
 // MemoryHistory is an in-memory implementation of the History interface.
 type MemoryHistory struct {
-	top  *Node
-	size int
+	states []*State
+	Capacity int
 }
 
 // NewMemoryHistory creates and returns a new *StateHistory type.
@@ -48,22 +49,33 @@ func NewMemoryHistory() *MemoryHistory {
 
 // Len returns the number of states in the history.
 func (his *MemoryHistory) Len() int {
-	return his.size
+	return len(his.states)
+}
+
+// Len returns the number of states in the history.
+func (his *MemoryHistory) SetCapacity(capacity int) {
+	his.Capacity = capacity
 }
 
 // Push adds a new State at the front of the history.
 func (his *MemoryHistory) Push(p *State) int {
-	his.top = &Node{p, his.top}
-	his.size++
-	return his.size
+	if his.Capacity > 0 {
+		his.states = append(his.states,p)
+		if len(his.states) > his.Capacity {
+			his.states = his.states[1:]
+		}
+	}
+	return len(his.states)
 }
 
 // Pop removes and returns the State at the front of the history.
 func (his *MemoryHistory) Pop() *State {
-	if his.size > 0 {
-		value := his.top.Value
-		his.top = his.top.Next
-		his.size--
+	if len(his.states) > 0 {
+		value := his.states[len(his.states)-1]
+		if len(his.states) > 1 {
+			his.states[len(his.states)-1] = nil
+			his.states = his.states[0:len(his.states)-1]
+		}
 		return value
 	}
 
@@ -72,8 +84,8 @@ func (his *MemoryHistory) Pop() *State {
 
 // Top returns the State at the front of the history without removing it.
 func (his *MemoryHistory) Top() *State {
-	if his.size == 0 {
+	if len(his.states) == 0 {
 		return nil
 	}
-	return his.top.Value
+	return his.states[len(his.states)-1]
 }
