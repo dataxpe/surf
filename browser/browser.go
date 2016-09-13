@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 	"time"
-	"github.com/PuerkitoBio/goquery"
+	"github.com/jabbahotep/goquery"
 	"github.com/jabbahotep/surf/errors"
 	"github.com/jabbahotep/surf/jar"
     "regexp"
