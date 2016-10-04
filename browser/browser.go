@@ -615,6 +615,7 @@ func (bow *Browser) Find(expr string) *goquery.Selection {
 // buildClient creates, configures, and returns a *http.Client type.
 func (bow *Browser) buildClient() *http.Client {
 	client := &http.Client{}
+	client.Timeout = time.Duration(180 * time.Second)
 	client.Jar = bow.cookies
 	client.CheckRedirect = bow.shouldRedirect
 	if bow.transport != nil {
