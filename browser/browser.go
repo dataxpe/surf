@@ -17,6 +17,8 @@ import (
 	"github.com/jabbahotep/surf/jar"
     "regexp"
 	"golang.org/x/net/html/charset"
+	"github.com/robertkrimen/otto"
+	"strconv"
  )
 
 // Attribute represents a Browser capability.
@@ -36,6 +38,7 @@ const (
 	FollowRedirects
 
 )
+
 
 // InitialAssetsArraySize is the initial size when allocating a slice of page
 // assets. Increasing this size may lead to a very small performance increase
@@ -688,8 +691,15 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	if err != nil {
 		return err
 	}
-
 	defer resp.Body.Close()
+
+	if resp.StatusCode == 503 && resp.Header.Get("Server") == "cloudflare-nginx" {
+		if !bow.solveCF(resp, req.URL) {
+			return fmt.Errorf("Page protected with cloudflare with unknown algorythm")
+		} else {
+			return nil
+		}		
+	} 
 
     content_type := resp.Header.Get("Content-Type")
 	fixedBody, err := charset.NewReader(resp.Body, content_type)
@@ -721,6 +731,80 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	return nil
 }
 
+// Solve CloudFlare
+func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
+	if strings.Contains(rurl.String(),"chk_jschl") {
+		// We are in deadloop
+		return false
+	}
+	time.Sleep(time.Duration(5) * time.Second)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return false
+	}
+	buff := bytes.NewBuffer(body)
+	dom, err := goquery.NewDocumentFromReader(buff)
+
+	host := rurl.Host
+
+	js := dom.Find("script:contains(\"s,t,o,p,b,r,e,a,k,i,n,g\")").Text();
+
+	re1 := regexp.MustCompile("setTimeout\\(function\\(\\){\\s+(var s,t,o,p,b,r,e,a,k,i,n,g,f.+?\\r?\\n[\\s\\S]+?a\\.value =.+?)\\r?\\n")
+	re2 := regexp.MustCompile("a\\.value = (parseInt\\(.+?\\)).+")
+	re3 := regexp.MustCompile("\\s{3,}[a-z](?: = |\\.).+")
+	re4 := regexp.MustCompile("[\\n\\\\']")
+	
+	js = re1.FindAllStringSubmatch(js, -1)[0][1]
+	js = re2.ReplaceAllString(js, re2.FindAllStringSubmatch(js, -1)[0][1])
+	js = re3.ReplaceAllString(js, "")
+	js = re4.ReplaceAllString(js, "")
+	js = strings.Replace(js, "return", "", -1)
+
+	jsEngine := otto.New()
+	data, err := jsEngine.Eval(js)
+	if err != nil {
+		return false
+	}
+	checksum, err := data.ToInteger();
+	if err != nil {
+		return false
+	}
+	checksum += int64(len(host))
+	if err != nil {
+		return false
+	}
+
+	jschlVc, _ := dom.Find("input[name=\"jschl_vc\"]").Attr("value")
+	pass, _ := dom.Find("input[name=\"pass\"]").Attr("value")
+	jschlAnswer := strconv.Itoa(int(checksum))
+
+	u := rurl.Scheme + "://" + rurl.Host + "/cdn-cgi/l/chk_jschl"
+	ur, err := url.Parse(u)
+	q := ur.Query()
+	q.Add("jschl_vc", jschlVc)	
+	q.Add("pass", pass)	
+	q.Add("jschl_answer", jschlAnswer)
+	ur.RawQuery = q.Encode()
+	
+	bow.DelRequestHeader("Cookie")
+	bow.DelRequestHeader("Referer")
+	bow.AddRequestHeader("Referer",rurl.String())
+
+	cjar := bow.GetCookieJar()
+	cook := cjar.Cookies(rurl)
+	if cook != nil {
+		for _, co := range cook {
+			bow.AddRequestHeader("Cookie",co.Name + "=" + co.Value)
+		}
+	}
+	bow.Open(ur.String())
+
+	if bow.refresh != nil {
+		bow.refresh.Stop()
+	}
+	return true
+}
+
 // preSend sets browser state before sending a request.
 func (bow *Browser) preSend() {
 	if bow.refresh != nil {
@@ -749,8 +833,19 @@ func (bow *Browser) postSend() {
 }
 
 // shouldRedirect is used as the value to http.Client.CheckRedirect.
-func (bow *Browser) shouldRedirect(req *http.Request, _ []*http.Request) error {
+func (bow *Browser) shouldRedirect(req *http.Request, via []*http.Request) error {
 	if bow.attributes[FollowRedirects] {
+		if len(via) >= 10 {
+   			return fmt.Errorf("too many redirects")
+  		}
+  		if len(via) == 0 {
+   			return nil
+  		}
+  		for attr, val := range via[0].Header {
+   			if _, ok := req.Header[attr]; !ok {
+    			req.Header[attr] = val
+   			}
+  		}
 		return nil
 	}
 	return errors.NewLocation(
