@@ -702,21 +702,25 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	} 
 
     content_type := resp.Header.Get("Content-Type")
-	fixedBody, err := charset.NewReader(resp.Body, content_type)
 
-	if err == nil {
-		bow.body, err = ioutil.ReadAll(fixedBody)
-		if err != nil {
-			return err
-		}
+ 	if resp.StatusCode != 403 {
+		fixedBody, err := charset.NewReader(resp.Body, content_type)
+  		if err == nil {
+   			bow.body, err = ioutil.ReadAll(fixedBody)
+			if err != nil {
+				return err
+			}
+  		} else {
+   			bow.body, err = ioutil.ReadAll(resp.Body)
+   			if err != nil {
+    			return err
+   			}
+  		}
+  		bow.contentConversion(content_type)
 	} else {
-		bow.body, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
+		bow.body = []byte(`<html></html>`)
 	}
 
-	bow.contentConversion(content_type)
 
 	buff := bytes.NewBuffer(bow.body)
 	dom, err := goquery.NewDocumentFromReader(buff)
