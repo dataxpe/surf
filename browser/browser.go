@@ -19,6 +19,8 @@ import (
 	"golang.org/x/net/html/charset"
 	"github.com/robertkrimen/otto"
 	"strconv"
+    "golang.org/x/text/encoding/simplifiedchinese"
+    "golang.org/x/text/transform"
  )
 
 // Attribute represents a Browser capability.
@@ -708,7 +710,16 @@ func (bow *Browser) httpRequest(req *http.Request) error {
   		if err == nil {
    			bow.body, err = ioutil.ReadAll(fixedBody)
 			if err != nil {
-				return err
+				if content_type == "text/html; charset=GBK" {
+					var enc = simplifiedchinese.GBK
+				    r := transform.NewReader(resp.Body, enc.NewDecoder())
+		   			bow.body, err = ioutil.ReadAll(r)
+					if err != nil {
+						return err
+					}
+				} else {
+					return err
+				}
 			}
   		} else {
    			bow.body, err = ioutil.ReadAll(resp.Body)
