@@ -19,8 +19,7 @@ import (
 	"golang.org/x/net/html/charset"
 	"github.com/robertkrimen/otto"
 	"strconv"
-    "golang.org/x/text/encoding/simplifiedchinese"
-    "golang.org/x/text/transform"
+    "github.com/Diggernaut/mahonia"
  )
 
 // Attribute represents a Browser capability.
@@ -706,27 +705,27 @@ func (bow *Browser) httpRequest(req *http.Request) error {
     content_type := resp.Header.Get("Content-Type")
 
  	if resp.StatusCode != 403 {
-		fixedBody, err := charset.NewReader(resp.Body, content_type)
-  		if err == nil {
-   			bow.body, err = ioutil.ReadAll(fixedBody)
+		if content_type == "text/html; charset=GBK" {
+			enc := mahonia.NewDecoder("gbk")
+ 			e := enc.NewReader(resp.Body)
+			bow.body, err = ioutil.ReadAll(e)
 			if err != nil {
-				if content_type == "text/html; charset=GBK" {
-					var enc = simplifiedchinese.GBK
-				    r := transform.NewReader(resp.Body, enc.NewDecoder())
-		   			bow.body, err = ioutil.ReadAll(r)
-					if err != nil {
-						return err
-					}
-				} else {
+				return err
+			}
+		} else {
+			fixedBody, err := charset.NewReader(resp.Body, content_type)
+			if err == nil {
+				bow.body, err = ioutil.ReadAll(fixedBody)
+				if err != nil {
+					return err
+				}
+			} else {
+				bow.body, err = ioutil.ReadAll(resp.Body)
+				if err != nil {
 					return err
 				}
 			}
-  		} else {
-   			bow.body, err = ioutil.ReadAll(resp.Body)
-   			if err != nil {
-    			return err
-   			}
-  		}
+		}
   		bow.contentConversion(content_type)
 	} else {
 		bow.body = []byte(`<html></html>`)
