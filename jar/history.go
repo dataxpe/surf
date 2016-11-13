@@ -1,7 +1,7 @@
 package jar
 
 import (
-	"github.com/jabbahotep/goquery"
+	"github.com/Diggernaut/goquery"
 	"net/http"
 )
 

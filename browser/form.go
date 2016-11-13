@@ -1,8 +1,8 @@
 package browser
 
 import (
-	"github.com/jabbahotep/goquery"
-	"github.com/jabbahotep/surf/errors"
+	"github.com/Diggernaut/goquery"
+	"github.com/Diggernaut/surf/errors"
 	"net/url"
 	"strings"
 )

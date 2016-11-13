@@ -1,7 +1,7 @@
 package jar
 
 import (
-	"github.com/jabbahotep/ut"
+	"github.com/Diggernaut/ut"
 	"testing"
 )
 

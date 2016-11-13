@@ -2,9 +2,9 @@
 package surf
 
 import (
-	"github.com/jabbahotep/surf/agent"
-	"github.com/jabbahotep/surf/browser"
-	"github.com/jabbahotep/surf/jar"
+	"github.com/Diggernaut/surf/agent"
+	"github.com/Diggernaut/surf/browser"
+	"github.com/Diggernaut/surf/jar"
 	"net/http"
 )
 
