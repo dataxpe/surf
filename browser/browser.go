@@ -10,17 +10,18 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
+
 	"github.com/Diggernaut/goquery"
+	"github.com/Diggernaut/mahonia"
 	"github.com/Diggernaut/surf/errors"
 	"github.com/Diggernaut/surf/jar"
-    "regexp"
-	"golang.org/x/net/html/charset"
 	"github.com/robertkrimen/otto"
-	"strconv"
-    "github.com/Diggernaut/mahonia"
- )
+	"golang.org/x/net/html/charset"
+)
 
 // Attribute represents a Browser capability.
 type Attribute int
@@ -37,9 +38,7 @@ const (
 
 	// FollowRedirectsAttribute instructs a Browser to follow Location headers.
 	FollowRedirects
-
 )
-
 
 // InitialAssetsArraySize is the initial size when allocating a slice of page
 // assets. Increasing this size may lead to a very small performance increase
@@ -67,7 +66,7 @@ type Browsable interface {
 	SetCookieJar(cj http.CookieJar)
 
 	// GetCookieJar is used to get the cookie jar the browser uses.
-	GetCookieJar()http.CookieJar
+	GetCookieJar() http.CookieJar
 
 	// SetHistoryJar is used to set the history jar the browser uses.
 	SetHistoryJar(hj jar.History)
@@ -95,7 +94,7 @@ type Browsable interface {
 
 	// Open requests the given URL using the GET method.
 	Open(url string) error
-	
+
 	// Open requests the given URL using the HEAD method.
 	Head(url string) error
 
@@ -178,7 +177,7 @@ type Browsable interface {
 	Find(expr string) *goquery.Selection
 
 	// Register pluggable converter
-	SetConverter(content_type string, f func([]byte)[]byte)
+	SetConverter(content_type string, f func([]byte) []byte)
 
 	// Unregister pluggable converter
 	ClearConverter(content_type string)
@@ -218,23 +217,46 @@ type Browser struct {
 	body []byte
 
 	// pluggable converters
-	pluggable_converters map[string]func([]byte)[]byte
+	pluggable_converters map[string]func([]byte) []byte
 
+	// pluggable_content_type_checker
+	pluggableContentTypeChecker []string
 }
 
 // Init pluggable map
 func (bow *Browser) InitConverters() {
-    bow.pluggable_converters = make(map[string]func([]byte)[]byte)
+	bow.pluggable_converters = make(map[string]func([]byte) []byte)
+	bow.pluggableContentTypeChecker = []string{}
+}
+
+func (bow *Browser) SetContentFixer(content_type string) {
+	bow.pluggableContentTypeChecker = append(bow.pluggableContentTypeChecker, content_type)
+}
+func (bow *Browser) ClearContentFixer(content_type string) {
+	i := isInSlice(content_type, bow.pluggableContentTypeChecker)
+	if i != -1 {
+		bow.pluggableContentTypeChecker = append(bow.pluggableContentTypeChecker[:i], bow.pluggableContentTypeChecker[i+1:]...)
+	}
+
+}
+func isInSlice(str string, sl []string) int {
+	for p, v := range sl {
+		if v == str {
+			return p
+		}
+	}
+	return -1
+
 }
 
 // Register pluggable converter
-func (bow *Browser) SetConverter(content_type string, f func([]byte)[]byte) {
-    bow.pluggable_converters[content_type] = f
+func (bow *Browser) SetConverter(content_type string, f func([]byte) []byte) {
+	bow.pluggable_converters[content_type] = f
 }
 
 // Unregister pluggable converter
 func (bow *Browser) ClearConverter(content_type string) {
-    bow.pluggable_converters[content_type] = nil
+	bow.pluggable_converters[content_type] = nil
 }
 
 // Open requests the given URL using the GET method.
@@ -520,7 +542,7 @@ func (bow *Browser) SetTransport(t *http.Transport) {
 }
 
 // GetTransport gets the http library transport mechanism.
-func (bow *Browser) GetTransport() *http.Transport{
+func (bow *Browser) GetTransport() *http.Transport {
 	return bow.transport
 }
 
@@ -699,38 +721,46 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 			return fmt.Errorf("Page protected with cloudflare with unknown algorythm")
 		} else {
 			return nil
-		}		
-	} 
+		}
+	}
 
-    content_type := resp.Header.Get("Content-Type")
-
- 	if resp.StatusCode != 403 {
+	content_type := resp.Header.Get("Content-Type")
+	fmt.Println(content_type)
+	if resp.StatusCode != 403 {
 		if content_type == "text/html; charset=GBK" {
 			enc := mahonia.NewDecoder("gbk")
- 			e := enc.NewReader(resp.Body)
+			e := enc.NewReader(resp.Body)
 			bow.body, err = ioutil.ReadAll(e)
 			if err != nil {
 				return err
 			}
-		} else {
+		} else if !bow.contentFix(content_type) {
 			fixedBody, err := charset.NewReader(resp.Body, content_type)
 			if err == nil {
 				bow.body, err = ioutil.ReadAll(fixedBody)
 				if err != nil {
 					return err
 				}
+
 			} else {
 				bow.body, err = ioutil.ReadAll(resp.Body)
 				if err != nil {
 					return err
 				}
+
+			}
+		} else {
+			bow.body, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return err
 			}
 		}
-  		bow.contentConversion(content_type)
+
+		bow.contentConversion(content_type)
+		fmt.Println(string(bow.body))
 	} else {
 		bow.body = []byte(`<html></html>`)
 	}
-
 
 	buff := bytes.NewBuffer(bow.body)
 	dom, err := goquery.NewDocumentFromReader(buff)
@@ -747,7 +777,7 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 
 // Solve CloudFlare
 func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
-	if strings.Contains(rurl.String(),"chk_jschl") {
+	if strings.Contains(rurl.String(), "chk_jschl") {
 		// We are in deadloop
 		return false
 	}
@@ -761,13 +791,13 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 
 	host := rurl.Host
 
-	js := dom.Find("script:contains(\"s,t,o,p,b,r,e,a,k,i,n,g\")").Text();
+	js := dom.Find("script:contains(\"s,t,o,p,b,r,e,a,k,i,n,g\")").Text()
 
 	re1 := regexp.MustCompile("setTimeout\\(function\\(\\){\\s+(var s,t,o,p,b,r,e,a,k,i,n,g,f.+?\\r?\\n[\\s\\S]+?a\\.value =.+?)\\r?\\n")
 	re2 := regexp.MustCompile("a\\.value = (parseInt\\(.+?\\)).+")
 	re3 := regexp.MustCompile("\\s{3,}[a-z](?: = |\\.).+")
 	re4 := regexp.MustCompile("[\\n\\\\']")
-	
+
 	js = re1.FindAllStringSubmatch(js, -1)[0][1]
 	js = re2.ReplaceAllString(js, re2.FindAllStringSubmatch(js, -1)[0][1])
 	js = re3.ReplaceAllString(js, "")
@@ -779,7 +809,7 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 	if err != nil {
 		return false
 	}
-	checksum, err := data.ToInteger();
+	checksum, err := data.ToInteger()
 	if err != nil {
 		return false
 	}
@@ -795,20 +825,20 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 	u := rurl.Scheme + "://" + rurl.Host + "/cdn-cgi/l/chk_jschl"
 	ur, err := url.Parse(u)
 	q := ur.Query()
-	q.Add("jschl_vc", jschlVc)	
-	q.Add("pass", pass)	
+	q.Add("jschl_vc", jschlVc)
+	q.Add("pass", pass)
 	q.Add("jschl_answer", jschlAnswer)
 	ur.RawQuery = q.Encode()
-	
+
 	bow.DelRequestHeader("Cookie")
 	bow.DelRequestHeader("Referer")
-	bow.AddRequestHeader("Referer",rurl.String())
+	bow.AddRequestHeader("Referer", rurl.String())
 
 	cjar := bow.GetCookieJar()
 	cook := cjar.Cookies(rurl)
 	if cook != nil {
 		for _, co := range cook {
-			bow.AddRequestHeader("Cookie",co.Name + "=" + co.Value)
+			bow.AddRequestHeader("Cookie", co.Name+"="+co.Value)
 		}
 	}
 	bow.Open(ur.String())
@@ -850,16 +880,16 @@ func (bow *Browser) postSend() {
 func (bow *Browser) shouldRedirect(req *http.Request, via []*http.Request) error {
 	if bow.attributes[FollowRedirects] {
 		if len(via) >= 10 {
-   			return fmt.Errorf("too many redirects")
-  		}
-  		if len(via) == 0 {
-   			return nil
-  		}
-  		for attr, val := range via[0].Header {
-   			if _, ok := req.Header[attr]; !ok {
-    			req.Header[attr] = val
-   			}
-  		}
+			return fmt.Errorf("too many redirects")
+		}
+		if len(via) == 0 {
+			return nil
+		}
+		for attr, val := range via[0].Header {
+			if _, ok := req.Header[attr]; !ok {
+				req.Header[attr] = val
+			}
+		}
 		return nil
 	}
 	return errors.NewLocation(
@@ -901,9 +931,21 @@ func isContentTypeHtml(res *http.Response) bool {
 
 // Manipulate contents with specific content-type
 func (bow *Browser) contentConversion(content_type string) {
-    re := regexp.MustCompile("^([A-z\\/]+)")
-    match := re.FindAllStringSubmatch(content_type, -1)[0][1]
-    if bow.pluggable_converters[match] != nil {
-        bow.body = bow.pluggable_converters[match](bow.body)
-    }
+	re := regexp.MustCompile("^([A-z\\/]+)")
+	match := re.FindAllStringSubmatch(content_type, -1)[0][1]
+	if bow.pluggable_converters[match] != nil {
+		bow.body = bow.pluggable_converters[match](bow.body)
+	}
+}
+
+// Check content before fix Body with specific content-type
+func (bow *Browser) contentFix(content_type string) bool {
+	re := regexp.MustCompile("^([A-z\\/]+)")
+	match := re.FindAllStringSubmatch(content_type, -1)[0][1]
+	for _, v := range bow.pluggableContentTypeChecker {
+		if v == match {
+			return true
+		}
+	}
+	return false
 }
