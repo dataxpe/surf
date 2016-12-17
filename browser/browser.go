@@ -177,7 +177,7 @@ type Browsable interface {
 	Find(expr string) *goquery.Selection
 
 	// Register pluggable converter
-	SetConverter(content_type string, f func([]byte) []byte)
+	SetConverter(content_type string, f func([]byte, string) []byte)
 
 	// Unregister pluggable converter
 	ClearConverter(content_type string)
@@ -217,7 +217,7 @@ type Browser struct {
 	body []byte
 
 	// pluggable converters
-	pluggable_converters map[string]func([]byte) []byte
+	pluggable_converters map[string]func([]byte, string) []byte
 
 	// pluggable_content_type_checker
 	pluggableContentTypeChecker []string
@@ -225,7 +225,7 @@ type Browser struct {
 
 // Init pluggable map
 func (bow *Browser) InitConverters() {
-	bow.pluggable_converters = make(map[string]func([]byte) []byte)
+	bow.pluggable_converters = make(map[string]func([]byte, string) []byte)
 	bow.pluggableContentTypeChecker = []string{}
 }
 
@@ -250,7 +250,7 @@ func isInSlice(str string, sl []string) int {
 }
 
 // Register pluggable converter
-func (bow *Browser) SetConverter(content_type string, f func([]byte) []byte) {
+func (bow *Browser) SetConverter(content_type string, f func([]byte, string) []byte) {
 	bow.pluggable_converters[content_type] = f
 }
 
@@ -725,7 +725,6 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	}
 
 	content_type := resp.Header.Get("Content-Type")
-	fmt.Println(content_type)
 	if resp.StatusCode != 403 {
 		if content_type == "text/html; charset=GBK" {
 			enc := mahonia.NewDecoder("gbk")
@@ -757,7 +756,6 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 		}
 
 		bow.contentConversion(content_type)
-		fmt.Println(string(bow.body))
 	} else {
 		bow.body = []byte(`<html></html>`)
 	}
@@ -934,7 +932,7 @@ func (bow *Browser) contentConversion(content_type string) {
 	re := regexp.MustCompile("^([A-z\\/]+)")
 	match := re.FindAllStringSubmatch(content_type, -1)[0][1]
 	if bow.pluggable_converters[match] != nil {
-		bow.body = bow.pluggable_converters[match](bow.body)
+		bow.body = bow.pluggable_converters[match](bow.body, content_type)
 	}
 }
 
