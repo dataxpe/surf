@@ -930,19 +930,25 @@ func isContentTypeHtml(res *http.Response) bool {
 // Manipulate contents with specific content-type
 func (bow *Browser) contentConversion(content_type string) {
 	re := regexp.MustCompile("^([A-z\\/]+)")
-	match := re.FindAllStringSubmatch(content_type, -1)[0][1]
-	if bow.pluggable_converters[match] != nil {
-		bow.body = bow.pluggable_converters[match](bow.body, content_type)
+	matches := re.FindAllStringSubmatch(content_type, -1)
+	if len(matches) > 0 {
+		match := matches[0][1]
+		if bow.pluggable_converters[match] != nil {
+			bow.body = bow.pluggable_converters[match](bow.body, content_type)
+		}
 	}
 }
 
 // Check content before fix Body with specific content-type
 func (bow *Browser) contentFix(content_type string) bool {
 	re := regexp.MustCompile("^([A-z\\/]+)")
-	match := re.FindAllStringSubmatch(content_type, -1)[0][1]
-	for _, v := range bow.pluggableContentTypeChecker {
-		if v == match {
-			return true
+	matches := re.FindAllStringSubmatch(content_type, -1)
+	if len(matches) > 0 {
+		match := matches[0][1]
+		for _, v := range bow.pluggableContentTypeChecker {
+			if v == match {
+				return true
+			}
 		}
 	}
 	return false
