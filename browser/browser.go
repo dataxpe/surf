@@ -719,22 +719,21 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	if resp.StatusCode == 503 && resp.Header.Get("Server") == "cloudflare-nginx" {
 		if !bow.solveCF(resp, req.URL) {
 			return fmt.Errorf("Page protected with cloudflare with unknown algorythm")
-		} else {
-			return nil
 		}
+		return nil
 	}
 
-	content_type := resp.Header.Get("Content-Type")
+	contentType := resp.Header.Get("Content-Type")
 	if resp.StatusCode != 403 {
-		if content_type == "text/html; charset=GBK" {
+		if contentType == "text/html; charset=GBK" {
 			enc := mahonia.NewDecoder("gbk")
 			e := enc.NewReader(resp.Body)
 			bow.body, err = ioutil.ReadAll(e)
 			if err != nil {
 				return err
 			}
-		} else if !bow.contentFix(content_type) {
-			fixedBody, err := charset.NewReader(resp.Body, content_type)
+		} else if !bow.contentFix(contentType) {
+			fixedBody, err := charset.NewReader(resp.Body, contentType)
 			if err == nil {
 				bow.body, err = ioutil.ReadAll(fixedBody)
 				if err != nil {
@@ -755,7 +754,7 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 			}
 		}
 
-		bow.contentConversion(content_type)
+		bow.contentConversion(contentType)
 	} else {
 		bow.body = []byte(`<html></html>`)
 	}
