@@ -716,6 +716,11 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	}
 	defer resp.Body.Close()
 
+	if os.Getenv("SURF_DEBUG_HEADERS") != "" {
+		d, _ := httputil.DumpResponse(resp, false)
+		fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
+	}
+
 	if resp.StatusCode == 503 && resp.Header.Get("Server") == "cloudflare-nginx" {
 		if !bow.solveCF(resp, req.URL) {
 			return fmt.Errorf("Page protected with cloudflare with unknown algorythm")
