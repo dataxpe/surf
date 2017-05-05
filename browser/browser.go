@@ -181,6 +181,9 @@ type Browsable interface {
 
 	// Unregister pluggable converter
 	ClearConverter(content_type string)
+
+	// Set cookie usage settings
+	UseCookie(setting bool)
 }
 
 // Default is the default Browser implementation.
@@ -221,6 +224,9 @@ type Browser struct {
 
 	// pluggable_content_type_checker
 	pluggableContentTypeChecker []string
+
+	// use cookie flag
+	useCookie bool
 }
 
 // Init pluggable map
@@ -642,7 +648,9 @@ func (bow *Browser) Find(expr string) *goquery.Selection {
 func (bow *Browser) buildClient() *http.Client {
 	client := &http.Client{}
 	client.Timeout = time.Duration(180 * time.Second)
-	client.Jar = bow.cookies
+	if bow.useCookie {
+		client.Jar = bow.cookies
+	}
 	client.CheckRedirect = bow.shouldRedirect
 	if bow.transport != nil {
 		client.Transport = bow.transport
@@ -658,15 +666,10 @@ func (bow *Browser) buildRequest(method, url string, ref *url.URL, body io.Reade
 	if err != nil {
 		return nil, err
 	}
-	req.Header = bow.headers
+	req.Header = copyHeaders(bow.headers)
 	req.Header.Set("User-Agent", bow.userAgent)
 	if bow.attributes[SendReferer] && ref != nil {
 		req.Header.Set("Referer", ref.String())
-	}
-
-	if os.Getenv("SURF_DEBUG_HEADERS") != "" {
-		d, _ := httputil.DumpRequest(req, false)
-		fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
 	}
 
 	return req, nil
@@ -715,6 +718,11 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if os.Getenv("SURF_DEBUG_HEADERS") != "" {
+		d, _ := httputil.DumpRequest(req, false)
+		fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
+	}
 
 	if os.Getenv("SURF_DEBUG_HEADERS") != "" {
 		d, _ := httputil.DumpResponse(resp, false)
@@ -956,4 +964,21 @@ func (bow *Browser) contentFix(content_type string) bool {
 		}
 	}
 	return false
+}
+
+// copyHeaders makes a copy of headers to avoid mixup between requests
+func copyHeaders(h http.Header) http.Header {
+	if h == nil {
+		return nil
+	}
+	h2 := make(http.Header, len(h))
+	for k, v := range h {
+		h2[k] = v
+	}
+	return h2
+}
+
+// UseCookie sets mode for using cookies in specific calls
+func (bow *Browser) UseCookie(setting bool)  {
+	bow.useCookie = setting
 }
