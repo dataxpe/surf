@@ -227,6 +227,10 @@ type Browser struct {
 
 	// use cookie flag
 	useCookie bool
+
+	// reload counter
+	reloadCounter int
+	maxReloads int
 }
 
 // Init pluggable map
@@ -777,11 +781,11 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	if err != nil {
 		return err
 	}
-
+	
 	bow.history.Push(bow.state)
 	bow.state = jar.NewHistoryState(req, resp, dom)
 	bow.postSend()
-
+	bow.reloadCounter = 0
 	return nil
 }
 
@@ -863,6 +867,7 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 func (bow *Browser) preSend() {
 	if bow.refresh != nil {
 		bow.refresh.Stop()
+		
 	}
 }
 
@@ -875,11 +880,11 @@ func (bow *Browser) postSend() {
 			if ok {
 				dur, err := time.ParseDuration(attr + "s")
 				if err == nil {
-					bow.refresh = time.NewTimer(dur)
-					go func() {
-						<-bow.refresh.C
+					if bow.reloadCounter < bow.maxReloads {
+						time.Sleep(dur)
+						bow.reloadCounter += 1
 						bow.Reload()
-					}()
+					}
 				}
 			}
 		}
@@ -981,4 +986,8 @@ func copyHeaders(h http.Header) http.Header {
 // UseCookie sets mode for using cookies in specific calls
 func (bow *Browser) UseCookie(setting bool)  {
 	bow.useCookie = setting
+}
+// SetMaxReloads sets max reloads via meta-equip=refresh
+func (bow *Browser) SetMaxReloads(max int) {
+	bow.maxReloads = max
 }
