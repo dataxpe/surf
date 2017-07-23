@@ -166,9 +166,9 @@ func (f *Form) send(buttonName, buttonValue string) error {
 	} else {
 		enctype, _ := f.selection.Attr("enctype")
 		if enctype == "multipart/form-data" {
-			return f.bow.PostMultipart(aurl.String(), values)
+			return f.bow.PostMultipart(aurl.String(), values, nil)
 		}
-		return f.bow.PostForm(aurl.String(), values)
+		return f.bow.PostForm(aurl.String(), values, nil)
 	}
 
 	return nil

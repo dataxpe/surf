@@ -105,13 +105,13 @@ type Browsable interface {
 	OpenBookmark(name string) error
 
 	// Post requests the given URL using the POST method.
-	Post(url string, contentType string, body io.Reader) error
+	Post(url string, contentType string, body io.Reader, ref *url.URL) error
 
 	// PostForm requests the given URL using the POST method with the given data.
-	PostForm(url string, data url.Values) error
+	PostForm(url string, data url.Values, ref *url.URL) error
 
 	// PostMultipart requests the given URL using the POST method with the given data using multipart/form-data format.
-	PostMultipart(u string, data url.Values) error
+	PostMultipart(u string, data url.Values, ref *url.URL) error
 
 	// Back loads the previously requested page.
 	Back() bool
@@ -304,21 +304,21 @@ func (bow *Browser) OpenBookmark(name string) error {
 }
 
 // Post requests the given URL using the POST method.
-func (bow *Browser) Post(u string, contentType string, body io.Reader) error {
+func (bow *Browser) Post(u string, contentType string, body io.Reader, ref *url.URL) error {
 	ur, err := url.Parse(u)
 	if err != nil {
 		return err
 	}
-	return bow.httpPOST(ur, bow.Url(), contentType, body)
+	return bow.httpPOST(ur, ref, contentType, body)
 }
 
 // PostForm requests the given URL using the POST method with the given data.
-func (bow *Browser) PostForm(u string, data url.Values) error {
-	return bow.Post(u, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+func (bow *Browser) PostForm(u string, data url.Values, ref *url.URL) error {
+	return bow.Post(u, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()), ref)
 }
 
 // PostMultipart requests the given URL using the POST method with the given data using multipart/form-data format.
-func (bow *Browser) PostMultipart(u string, data url.Values) error {
+func (bow *Browser) PostMultipart(u string, data url.Values, ref *url.URL) error {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -332,7 +332,7 @@ func (bow *Browser) PostMultipart(u string, data url.Values) error {
 		return err
 
 	}
-	return bow.Post(u, writer.FormDataContentType(), body)
+	return bow.Post(u, writer.FormDataContentType(), body, ref)
 }
 
 // Back loads the previously requested page.
