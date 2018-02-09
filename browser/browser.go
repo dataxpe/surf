@@ -946,7 +946,7 @@ func isContentTypeHtml(res *http.Response) bool {
 
 // Manipulate contents with specific content-type
 func (bow *Browser) contentConversion(content_type string) {
-	re := regexp.MustCompile("^([A-z\\/]+)")
+	re := regexp.MustCompile("^([A-z\\/\\.\\+\\-]+)")
 	matches := re.FindAllStringSubmatch(content_type, -1)
 	if len(matches) > 0 {
 		match := matches[0][1]
@@ -958,7 +958,7 @@ func (bow *Browser) contentConversion(content_type string) {
 
 // Check content before fix Body with specific content-type
 func (bow *Browser) contentFix(content_type string) bool {
-	re := regexp.MustCompile("^([A-z\\/]+)")
+	re := regexp.MustCompile("^([A-z\\/\\.\\+\\-]+)")
 	matches := re.FindAllStringSubmatch(content_type, -1)
 	if len(matches) > 0 {
 		match := matches[0][1]
