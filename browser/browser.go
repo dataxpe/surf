@@ -177,7 +177,7 @@ type Browsable interface {
 	Find(expr string) *goquery.Selection
 
 	// Register pluggable converter
-	SetConverter(content_type string, f func([]byte, string) []byte)
+	SetConverter(content_type string, f func([]byte, string, string) []byte)
 
 	// Unregister pluggable converter
 	ClearConverter(content_type string)
@@ -220,7 +220,7 @@ type Browser struct {
 	body []byte
 
 	// pluggable converters
-	pluggable_converters map[string]func([]byte, string) []byte
+	pluggable_converters map[string]func([]byte, string, string) []byte
 
 	// pluggable_content_type_checker
 	pluggableContentTypeChecker []string
@@ -235,7 +235,7 @@ type Browser struct {
 
 // Init pluggable map
 func (bow *Browser) InitConverters() {
-	bow.pluggable_converters = make(map[string]func([]byte, string) []byte)
+	bow.pluggable_converters = make(map[string]func([]byte, string, string) []byte)
 	bow.pluggableContentTypeChecker = []string{}
 }
 
@@ -260,7 +260,7 @@ func isInSlice(str string, sl []string) int {
 }
 
 // Register pluggable converter
-func (bow *Browser) SetConverter(content_type string, f func([]byte, string) []byte) {
+func (bow *Browser) SetConverter(content_type string, f func([]byte, string, string) []byte) {
 	bow.pluggable_converters[content_type] = f
 }
 
@@ -722,7 +722,6 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 		return err
 	}
 	defer resp.Body.Close()
-
 	if os.Getenv("SURF_DEBUG_HEADERS") != "" {
 		d, _ := httputil.DumpRequest(req, false)
 		fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
@@ -770,8 +769,7 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 				return err
 			}
 		}
-
-		bow.contentConversion(contentType)
+		bow.contentConversion(contentType, req.URL.String())
 	} else {
 		bow.body = []byte(`<html></html>`)
 	}
@@ -945,13 +943,13 @@ func isContentTypeHtml(res *http.Response) bool {
 }
 
 // Manipulate contents with specific content-type
-func (bow *Browser) contentConversion(content_type string) {
+func (bow *Browser) contentConversion(content_type string, url string) {
 	re := regexp.MustCompile("^([A-z\\/\\.\\+\\-]+)")
 	matches := re.FindAllStringSubmatch(content_type, -1)
 	if len(matches) > 0 {
 		match := matches[0][1]
 		if bow.pluggable_converters[match] != nil {
-			bow.body = bow.pluggable_converters[match](bow.body, content_type)
+			bow.body = bow.pluggable_converters[match](bow.body, content_type, url)
 		}
 	}
 }
