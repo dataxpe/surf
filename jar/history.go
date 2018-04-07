@@ -1,8 +1,10 @@
 package jar
 
 import (
-	"github.com/Diggernaut/goquery"
 	"net/http"
+	"sync"
+
+	"github.com/Diggernaut/goquery"
 )
 
 // State represents a point in time.
@@ -38,7 +40,8 @@ type History interface {
 
 // MemoryHistory is an in-memory implementation of the History interface.
 type MemoryHistory struct {
-	states []*State
+	sync.Mutex
+	states   []*State
 	Capacity int
 }
 
@@ -49,18 +52,24 @@ func NewMemoryHistory() *MemoryHistory {
 
 // Len returns the number of states in the history.
 func (his *MemoryHistory) Len() int {
+	his.Lock()
+	defer his.Unlock()
 	return len(his.states)
 }
 
 // Len returns the number of states in the history.
 func (his *MemoryHistory) SetCapacity(capacity int) {
+	his.Lock()
+	defer his.Unlock()
 	his.Capacity = capacity
 }
 
 // Push adds a new State at the front of the history.
 func (his *MemoryHistory) Push(p *State) int {
+	his.Lock()
+	defer his.Unlock()
 	if his.Capacity > 0 {
-		his.states = append(his.states,p)
+		his.states = append(his.states, p)
 		if len(his.states) > his.Capacity {
 			his.states = his.states[1:]
 		}
@@ -70,11 +79,13 @@ func (his *MemoryHistory) Push(p *State) int {
 
 // Pop removes and returns the State at the front of the history.
 func (his *MemoryHistory) Pop() *State {
+	his.Lock()
+	defer his.Unlock()
 	if len(his.states) > 0 {
 		value := his.states[len(his.states)-1]
 		if len(his.states) > 1 {
 			his.states[len(his.states)-1] = nil
-			his.states = his.states[0:len(his.states)-1]
+			his.states = his.states[0 : len(his.states)-1]
 		}
 		return value
 	}
@@ -84,6 +95,8 @@ func (his *MemoryHistory) Pop() *State {
 
 // Top returns the State at the front of the history without removing it.
 func (his *MemoryHistory) Top() *State {
+	his.Lock()
+	defer his.Unlock()
 	if len(his.states) == 0 {
 		return nil
 	}

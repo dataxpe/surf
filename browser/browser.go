@@ -1069,6 +1069,8 @@ func (bow *Browser) httpAsyncRequest(req *http.Request, name string) error {
 		return err
 	}
 	bow.astore.Set(name, dom)
+	bow.history.Push(bow.state)
+	bow.state = jar.NewHistoryState(req, resp, dom)
 	bow.postSend()
 	bow.reloadCounter = 0
 	return nil
