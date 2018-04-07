@@ -188,6 +188,8 @@ type Browsable interface {
 
 // Default is the default Browser implementation.
 type Browser struct {
+	// AsyncStore
+	astore *jar.AsyncStore
 	// state is the current browser state.
 	state *jar.State
 
@@ -230,7 +232,7 @@ type Browser struct {
 
 	// reload counter
 	reloadCounter int
-	maxReloads int
+	maxReloads    int
 }
 
 // Init pluggable map
@@ -238,7 +240,12 @@ func (bow *Browser) InitConverters() {
 	bow.pluggable_converters = make(map[string]func([]byte, string, string) []byte)
 	bow.pluggableContentTypeChecker = []string{}
 }
-
+func (bow *Browser) SetAsyncStore(a *jar.AsyncStore) {
+	bow.astore = a
+}
+func (bow *Browser) GetAsyncStore() *jar.AsyncStore {
+	return bow.astore
+}
 func (bow *Browser) SetContentFixer(content_type string) {
 	bow.pluggableContentTypeChecker = append(bow.pluggableContentTypeChecker, content_type)
 }
@@ -779,7 +786,7 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	if err != nil {
 		return err
 	}
-	
+
 	bow.history.Push(bow.state)
 	bow.state = jar.NewHistoryState(req, resp, dom)
 	bow.postSend()
@@ -865,7 +872,7 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 func (bow *Browser) preSend() {
 	if bow.refresh != nil {
 		bow.refresh.Stop()
-		
+
 	}
 }
 
@@ -954,6 +961,19 @@ func (bow *Browser) contentConversion(content_type string, url string) {
 	}
 }
 
+// Manipulate contents with specific content-type
+func (bow *Browser) contentAsyncConversion(content_type string, url string, bb []byte) []byte {
+	re := regexp.MustCompile("^([A-z\\/\\.\\+\\-]+)")
+	matches := re.FindAllStringSubmatch(content_type, -1)
+	if len(matches) > 0 {
+		match := matches[0][1]
+		if bow.pluggable_converters[match] != nil {
+			return bow.pluggable_converters[match](bb, content_type, url)
+		}
+	}
+	return bb
+}
+
 // Check content before fix Body with specific content-type
 func (bow *Browser) contentFix(content_type string) bool {
 	re := regexp.MustCompile("^([A-z\\/\\.\\+\\-]+)")
@@ -982,10 +1002,81 @@ func copyHeaders(h http.Header) http.Header {
 }
 
 // UseCookie sets mode for using cookies in specific calls
-func (bow *Browser) UseCookie(setting bool)  {
+func (bow *Browser) UseCookie(setting bool) {
 	bow.useCookie = setting
 }
+
 // SetMaxReloads sets max reloads via meta-equip=refresh
 func (bow *Browser) SetMaxReloads(max int) {
 	bow.maxReloads = max
+}
+
+func (bow *Browser) OpenAsync(u, name string) error {
+	ur, err := url.Parse(u)
+	if err != nil {
+		return err
+	}
+	return bow.httpAsyncGET(ur, nil, name)
+}
+
+func (bow *Browser) httpAsyncRequest(req *http.Request, name string) error {
+	bow.preSend()
+	resp, err := bow.buildClient().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	var bb []byte
+	contentType := resp.Header.Get("Content-Type")
+	if resp.StatusCode != 403 {
+		if contentType == "text/html; charset=GBK" {
+			enc := mahonia.NewDecoder("gbk")
+			e := enc.NewReader(resp.Body)
+			bb, err = ioutil.ReadAll(e)
+			if err != nil {
+				return err
+			}
+		} else if !bow.contentFix(contentType) {
+			fixedBody, err := charset.NewReader(resp.Body, contentType)
+			if err == nil {
+				bb, err = ioutil.ReadAll(fixedBody)
+				if err != nil {
+					return err
+				}
+
+			} else {
+				bb, err = ioutil.ReadAll(resp.Body)
+				if err != nil {
+					return err
+				}
+
+			}
+		} else {
+			bb, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+		}
+		bb = bow.contentAsyncConversion(contentType, req.URL.String(), bb)
+	} else {
+		bb = []byte(`<html></html>`)
+	}
+
+	buff := bytes.NewBuffer(bb)
+
+	dom, err := goquery.NewDocumentFromReader(buff)
+	if err != nil {
+		return err
+	}
+	bow.astore.Set(name, dom)
+	bow.postSend()
+	bow.reloadCounter = 0
+	return nil
+}
+func (bow *Browser) httpAsyncGET(u *url.URL, ref *url.URL, name string) error {
+	req, err := bow.buildRequest("GET", u.String(), ref, nil)
+	if err != nil {
+		return err
+	}
+	return bow.httpAsyncRequest(req, name)
 }

@@ -2,10 +2,11 @@
 package surf
 
 import (
+	"net/http"
+
 	"github.com/Diggernaut/surf/agent"
 	"github.com/Diggernaut/surf/browser"
 	"github.com/Diggernaut/surf/jar"
-	"net/http"
 )
 
 var (
@@ -25,6 +26,7 @@ var (
 // NewBrowser creates and returns a *browser.Browser type.
 func NewBrowser() *browser.Browser {
 	bow := &browser.Browser{}
+	bow.setAsyncStore(jar.NewAsyncStore())
 	bow.SetUserAgent(DefaultUserAgent)
 	bow.SetState(&jar.State{})
 	bow.SetCookieJar(jar.NewMemoryCookies())
@@ -37,7 +39,7 @@ func NewBrowser() *browser.Browser {
 		browser.MetaRefreshHandling: DefaultMetaRefreshHandling,
 		browser.FollowRedirects:     DefaultFollowRedirects,
 	})
-    bow.InitConverters()
-    
+	bow.InitConverters()
+
 	return bow
 }
