@@ -674,7 +674,7 @@ func (bow *Browser) ClearTimeout() {
 // buildClient creates, configures, and returns a *http.Client type.
 func (bow *Browser) buildClient() *http.Client {
 	client := &http.Client{}
-	client.Timeout = time.Duration(bow.timeout * time.Second)
+	client.Timeout = time.Duration(time.Duration(bow.timeout) * time.Second)
 	if bow.useCookie {
 		client.Jar = bow.cookies
 	}
