@@ -189,6 +189,8 @@ type Browsable interface {
 
 // Default is the default Browser implementation.
 type Browser struct {
+	//timeout
+	timeout int
 	// AsyncStore
 	astore *jar.AsyncStore
 	// state is the current browser state.
@@ -652,6 +654,16 @@ func (bow *Browser) Dom() *goquery.Selection {
 // Find returns the dom selections matching the given expression.
 func (bow *Browser) Find(expr string) *goquery.Selection {
 	return bow.state.Dom.Find(expr)
+}
+
+// SetTimeout set max timeout for build request
+func (bow *Browser) SetTimeout(t int) {
+	bow.timeout = t
+}
+
+// ClearTimeout set max timeout == 180 for build requst
+func (bow *Browser) ClearTimeout() {
+	bow.timeout = 180
 }
 
 // -- Unexported methods --

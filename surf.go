@@ -26,6 +26,7 @@ var (
 // NewBrowser creates and returns a *browser.Browser type.
 func NewBrowser() *browser.Browser {
 	bow := &browser.Browser{}
+	bow.ClearTimeout()
 	bow.SetAsyncStore(jar.NewAsyncStore())
 	bow.SetUserAgent(DefaultUserAgent)
 	bow.SetState(&jar.State{})
