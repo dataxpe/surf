@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -725,62 +726,65 @@ func (bow *Browser) httpPOST(u *url.URL, ref *url.URL, contentType string, body 
 func (bow *Browser) httpRequest(req *http.Request) error {
 	bow.preSend()
 	resp, err := bow.buildClient().Do(req)
-	if err != nil {
+	if e, ok := err.(net.Error); ok && e.Timeout() {
+		bow.body = []byte(`<html></html>`)
+	} else if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	if os.Getenv("SURF_DEBUG_HEADERS") != "" {
-		d, _ := httputil.DumpRequest(req, false)
-		fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
-	}
-
-	if os.Getenv("SURF_DEBUG_HEADERS") != "" {
-		d, _ := httputil.DumpResponse(resp, false)
-		fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
-	}
-
-	if resp.StatusCode == 503 && resp.Header.Get("Server") == "cloudflare-nginx" {
-		if !bow.solveCF(resp, req.URL) {
-			return fmt.Errorf("Page protected with cloudflare with unknown algorythm")
+	if resp != nil {
+		defer resp.Body.Close()
+		if os.Getenv("SURF_DEBUG_HEADERS") != "" {
+			d, _ := httputil.DumpRequest(req, false)
+			fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
 		}
-		return nil
-	}
 
-	contentType := resp.Header.Get("Content-Type")
-	if resp.StatusCode != 403 {
-		if contentType == "text/html; charset=GBK" {
-			enc := mahonia.NewDecoder("gbk")
-			e := enc.NewReader(resp.Body)
-			bow.body, err = ioutil.ReadAll(e)
-			if err != nil {
-				return err
+		if os.Getenv("SURF_DEBUG_HEADERS") != "" {
+			d, _ := httputil.DumpResponse(resp, false)
+			fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
+		}
+
+		if resp.StatusCode == 503 && resp.Header.Get("Server") == "cloudflare-nginx" {
+			if !bow.solveCF(resp, req.URL) {
+				return fmt.Errorf("Page protected with cloudflare with unknown algorythm")
 			}
-		} else if !bow.contentFix(contentType) {
-			fixedBody, err := charset.NewReader(resp.Body, contentType)
-			if err == nil {
-				bow.body, err = ioutil.ReadAll(fixedBody)
+			return nil
+		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if resp.StatusCode != 403 {
+			if contentType == "text/html; charset=GBK" {
+				enc := mahonia.NewDecoder("gbk")
+				e := enc.NewReader(resp.Body)
+				bow.body, err = ioutil.ReadAll(e)
 				if err != nil {
 					return err
 				}
+			} else if !bow.contentFix(contentType) {
+				fixedBody, err := charset.NewReader(resp.Body, contentType)
+				if err == nil {
+					bow.body, err = ioutil.ReadAll(fixedBody)
+					if err != nil {
+						return err
+					}
 
+				} else {
+					bow.body, err = ioutil.ReadAll(resp.Body)
+					if err != nil {
+						return err
+					}
+
+				}
 			} else {
 				bow.body, err = ioutil.ReadAll(resp.Body)
 				if err != nil {
 					return err
 				}
-
 			}
+			bow.contentConversion(contentType, req.URL.String())
 		} else {
-			bow.body, err = ioutil.ReadAll(resp.Body)
-			if err != nil {
-				return err
-			}
+			bow.body = []byte(`<html></html>`)
 		}
-		bow.contentConversion(contentType, req.URL.String())
-	} else {
-		bow.body = []byte(`<html></html>`)
 	}
-
 	buff := bytes.NewBuffer(bow.body)
 	dom, err := goquery.NewDocumentFromReader(buff)
 	if err != nil {
@@ -1021,47 +1025,50 @@ func (bow *Browser) OpenAsync(u, name string) error {
 
 func (bow *Browser) httpAsyncRequest(req *http.Request, name string) error {
 	bow.preSend()
+	var bb []byte
 	resp, err := bow.buildClient().Do(req)
-	if err != nil {
+	if e, ok := err.(net.Error); ok && e.Timeout() {
+		bb = []byte(`<html></html>`)
+	} else if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	var bb []byte
-	contentType := resp.Header.Get("Content-Type")
-	if resp.StatusCode != 403 {
-		if contentType == "text/html; charset=GBK" {
-			enc := mahonia.NewDecoder("gbk")
-			e := enc.NewReader(resp.Body)
-			bb, err = ioutil.ReadAll(e)
-			if err != nil {
-				return err
-			}
-		} else if !bow.contentFix(contentType) {
-			fixedBody, err := charset.NewReader(resp.Body, contentType)
-			if err == nil {
-				bb, err = ioutil.ReadAll(fixedBody)
+	if resp != nil {
+		defer resp.Body.Close()
+		contentType := resp.Header.Get("Content-Type")
+		if resp.StatusCode != 403 {
+			if contentType == "text/html; charset=GBK" {
+				enc := mahonia.NewDecoder("gbk")
+				e := enc.NewReader(resp.Body)
+				bb, err = ioutil.ReadAll(e)
 				if err != nil {
 					return err
 				}
+			} else if !bow.contentFix(contentType) {
+				fixedBody, err := charset.NewReader(resp.Body, contentType)
+				if err == nil {
+					bb, err = ioutil.ReadAll(fixedBody)
+					if err != nil {
+						return err
+					}
 
+				} else {
+					bb, err = ioutil.ReadAll(resp.Body)
+					if err != nil {
+						return err
+					}
+
+				}
 			} else {
 				bb, err = ioutil.ReadAll(resp.Body)
 				if err != nil {
 					return err
 				}
-
 			}
+			bb = bow.contentAsyncConversion(contentType, req.URL.String(), bb)
 		} else {
-			bb, err = ioutil.ReadAll(resp.Body)
-			if err != nil {
-				return err
-			}
+			bb = []byte(`<html></html>`)
 		}
-		bb = bow.contentAsyncConversion(contentType, req.URL.String(), bb)
-	} else {
-		bb = []byte(`<html></html>`)
 	}
-
 	buff := bytes.NewBuffer(bb)
 
 	dom, err := goquery.NewDocumentFromReader(buff)
