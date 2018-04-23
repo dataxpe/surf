@@ -658,6 +658,9 @@ func (bow *Browser) Find(expr string) *goquery.Selection {
 
 // SetTimeout set max timeout for build request
 func (bow *Browser) SetTimeout(t int) {
+	if t == 0 {
+		t = 180
+	}
 	bow.timeout = t
 }
 
