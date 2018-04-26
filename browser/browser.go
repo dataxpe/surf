@@ -1041,11 +1041,10 @@ func (bow *Browser) OpenAsync(u, name string) error {
 func (bow *Browser) httpAsyncRequest(req *http.Request, name string) error {
 	bow.preSend()
 	var bb []byte
+	bb = []byte(`<html></html>`)
 	resp, err := bow.buildClient().Do(req)
 	if e, ok := err.(net.Error); ok && e.Timeout() {
 		bb = []byte(`<html></html>`)
-	} else if err != nil {
-		return err
 	}
 	if resp != nil {
 		defer resp.Body.Close()
@@ -1056,27 +1055,27 @@ func (bow *Browser) httpAsyncRequest(req *http.Request, name string) error {
 				e := enc.NewReader(resp.Body)
 				bb, err = ioutil.ReadAll(e)
 				if err != nil {
-					return err
+					bb = []byte(`<html></html>`)
 				}
 			} else if !bow.contentFix(contentType) {
 				fixedBody, err := charset.NewReader(resp.Body, contentType)
 				if err == nil {
 					bb, err = ioutil.ReadAll(fixedBody)
 					if err != nil {
-						return err
+						bb = []byte(`<html></html>`)
 					}
 
 				} else {
 					bb, err = ioutil.ReadAll(resp.Body)
 					if err != nil {
-						return err
+						bb = []byte(`<html></html>`)
 					}
 
 				}
 			} else {
 				bb, err = ioutil.ReadAll(resp.Body)
 				if err != nil {
-					return err
+					bb = []byte(`<html></html>`)
 				}
 			}
 			bb = bow.contentAsyncConversion(contentType, req.URL.String(), bb)
@@ -1085,10 +1084,9 @@ func (bow *Browser) httpAsyncRequest(req *http.Request, name string) error {
 		}
 	}
 	buff := bytes.NewBuffer(bb)
-
 	dom, err := goquery.NewDocumentFromReader(buff)
 	if err != nil {
-		return err
+		dom, _ = goquery.NewDocumentFromReader(bytes.NewBuffer([]byte(`<html></html>`)))
 	}
 	bow.astore.Set(name, dom)
 	bow.history.Push(bow.state)
