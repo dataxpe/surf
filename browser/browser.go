@@ -637,7 +637,10 @@ func (bow *Browser) Title() string {
 
 // ResponseHeaders returns the page headers.
 func (bow *Browser) ResponseHeaders() http.Header {
-	return bow.state.Response.Header
+	if bow.state.Response != nil {
+		return bow.state.Response.Header
+	}
+	return http.Header{}
 }
 
 // Body returns the page body as a string of html.
