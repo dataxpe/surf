@@ -761,7 +761,7 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 			fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
 		}
 
-		if resp.StatusCode == 503 && resp.Header.Get("Server") == "cloudflare-nginx" {
+		if resp.StatusCode == 503 && (resp.Header.Get("Server") == "cloudflare-nginx" || resp.Header.Get("Server") == "cloudflare") {
 			if !bow.solveCF(resp, req.URL) {
 				return fmt.Errorf("Page protected with cloudflare with unknown algorythm")
 			}
@@ -822,7 +822,8 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 		// We are in deadloop
 		return false
 	}
-	time.Sleep(time.Duration(5) * time.Second)
+
+	time.Sleep(time.Duration(4) * time.Second)
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return false
@@ -833,20 +834,78 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 	host := rurl.Host
 
 	js := dom.Find("script:contains(\"s,t,o,p,b,r,e,a,k,i,n,g\")").Text()
+	if strings.Contains(js, "parseInt") {
+		re1 := regexp.MustCompile("setTimeout\\(function\\(\\){\\s+(var s,t,o,p,b,r,e,a,k,i,n,g,f.+?\\r?\\n[\\s\\S]+?a\\.value =.+?)\\r?\\n")
+		re2 := regexp.MustCompile("a\\.value = (parseInt\\(.+?\\)).+")
+		re3 := regexp.MustCompile("\\s{3,}[a-z](?: = |\\.).+")
+		re4 := regexp.MustCompile("[\\n\\\\']")
+	
+		js = re1.FindAllStringSubmatch(js, -1)[0][1]
+		js = re2.ReplaceAllString(js, re2.FindAllStringSubmatch(js, -1)[0][1])
+		js = re3.ReplaceAllString(js, "")
+		js = re4.ReplaceAllString(js, "")
+		js = strings.Replace(js, "return", "", -1)
+	
+		jsEngine := otto.New()
+		data, err := jsEngine.Eval(js)
+		if err != nil {
+			return false
+		}
+		checksum, err := data.ToInteger()
+		if err != nil {
+			return false
+		}
+		checksum += int64(len(host))
+		if err != nil {
+			return false
+		}
+	
+		jschlVc, _ := dom.Find("input[name=\"jschl_vc\"]").Attr("value")
+		pass, _ := dom.Find("input[name=\"pass\"]").Attr("value")
+		jschlAnswer := strconv.Itoa(int(checksum))
+	
+		u := rurl.Scheme + "://" + rurl.Host + "/cdn-cgi/l/chk_jschl"
+		ur, err := url.Parse(u)
+		q := ur.Query()
+		q.Add("jschl_vc", jschlVc)
+		q.Add("pass", pass)
+		q.Add("jschl_answer", jschlAnswer)
+		ur.RawQuery = q.Encode()
+	
+		bow.DelRequestHeader("Cookie")
+		bow.DelRequestHeader("Referer")
+		bow.AddRequestHeader("Referer", rurl.String())
+	
+		cjar := bow.GetCookieJar()
+		cook := cjar.Cookies(rurl)
+		if cook != nil {
+			for _, co := range cook {
+				bow.AddRequestHeader("Cookie", co.Name+"="+co.Value)
+			}
+		}
+		bow.Open(ur.String())
+	
+		if bow.refresh != nil {
+			bow.refresh.Stop()
+		}
+		return true
+	}
 
 	re1 := regexp.MustCompile("setTimeout\\(function\\(\\){\\s+(var s,t,o,p,b,r,e,a,k,i,n,g,f.+?\\r?\\n[\\s\\S]+?a\\.value =.+?)\\r?\\n")
-	re2 := regexp.MustCompile("a\\.value = (parseInt\\(.+?\\)).+")
-	re3 := regexp.MustCompile("\\s{3,}[a-z](?: = |\\.).+")
-	re4 := regexp.MustCompile("[\\n\\\\']")
+	re2 := regexp.MustCompile("\\s{3,}[a-z](?: = |\\.).+")
+	re3 := regexp.MustCompile("[\\n\\\\']")
+	re4 := regexp.MustCompile(";\\s*\\d+\\s*$")
+	re5 := regexp.MustCompile("a\\.value\\s*\\=")
 
 	js = re1.FindAllStringSubmatch(js, -1)[0][1]
-	js = re2.ReplaceAllString(js, re2.FindAllStringSubmatch(js, -1)[0][1])
+	js = strings.Replace(js, "s,t,o,p,b,r,e,a,k,i,n,g,f,", "s,t = \"" + host + "\",o,p,b,r,e,a,k,i,n,g,f,",1)
+	js = re2.ReplaceAllString(js, "")
 	js = re3.ReplaceAllString(js, "")
 	js = re4.ReplaceAllString(js, "")
-	js = strings.Replace(js, "return", "", -1)
+	js = re5.ReplaceAllString(js, "return ")
 
 	jsEngine := otto.New()
-	data, err := jsEngine.Eval(js)
+	data, err := jsEngine.Eval("(function () {" + js + "})()")
 	if err != nil {
 		return false
 	}
@@ -861,27 +920,21 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 
 	jschlVc, _ := dom.Find("input[name=\"jschl_vc\"]").Attr("value")
 	pass, _ := dom.Find("input[name=\"pass\"]").Attr("value")
-	jschlAnswer := strconv.Itoa(int(checksum))
 
 	u := rurl.Scheme + "://" + rurl.Host + "/cdn-cgi/l/chk_jschl"
 	ur, err := url.Parse(u)
 	q := ur.Query()
 	q.Add("jschl_vc", jschlVc)
 	q.Add("pass", pass)
-	q.Add("jschl_answer", jschlAnswer)
-	ur.RawQuery = q.Encode()
+	ur.RawQuery = q.Encode() + "&jschl_answer=" + data.String()
 
 	bow.DelRequestHeader("Cookie")
 	bow.DelRequestHeader("Referer")
 	bow.AddRequestHeader("Referer", rurl.String())
+	bow.AddRequestHeader("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8")
+	bow.AddRequestHeader("accept-language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
+	bow.AddRequestHeader("upgrade-insecure-requests", "1")
 
-	cjar := bow.GetCookieJar()
-	cook := cjar.Cookies(rurl)
-	if cook != nil {
-		for _, co := range cook {
-			bow.AddRequestHeader("Cookie", co.Name+"="+co.Value)
-		}
-	}
 	bow.Open(ur.String())
 
 	if bow.refresh != nil {
