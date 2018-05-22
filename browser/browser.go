@@ -747,7 +747,8 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	if e, ok := err.(net.Error); ok && e.Timeout() {
 		bow.body = []byte(`<html></html>`)
 	} else if err != nil {
-		return err
+		bow.body = []byte(`<html></html>`)
+		return bow.httpRequestComplete(req, resp, err)
 	}
 	if resp != nil {
 		defer resp.Body.Close()
@@ -763,7 +764,7 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 
 		if resp.StatusCode == 503 && (resp.Header.Get("Server") == "cloudflare-nginx" || resp.Header.Get("Server") == "cloudflare") {
 			if !bow.solveCF(resp, req.URL) {
-				return fmt.Errorf("Page protected with cloudflare with unknown algorythm")
+				return bow.httpRequestComplete(req, resp, fmt.Errorf("Page protected with cloudflare with unknown algorythm"))
 			}
 			return nil
 		}
@@ -775,45 +776,56 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 				e := enc.NewReader(resp.Body)
 				bow.body, err = ioutil.ReadAll(e)
 				if err != nil {
-					return err
+					return bow.httpRequestComplete(req, resp, err)
 				}
 			} else if !bow.contentFix(contentType) {
 				fixedBody, err := charset.NewReader(resp.Body, contentType)
 				if err == nil {
 					bow.body, err = ioutil.ReadAll(fixedBody)
 					if err != nil {
-						return err
+						return bow.httpRequestComplete(req, resp, err)
 					}
 
 				} else {
 					bow.body, err = ioutil.ReadAll(resp.Body)
 					if err != nil {
-						return err
+						return bow.httpRequestComplete(req, resp, err)
 					}
 
 				}
 			} else {
 				bow.body, err = ioutil.ReadAll(resp.Body)
 				if err != nil {
-					return err
+					return bow.httpRequestComplete(req, resp, err)
 				}
 			}
 			bow.contentConversion(contentType, req.URL.String())
 		} else {
-			bow.body = []byte(`<html></html>`)
+			if resp.Body != nil {
+				bow.body, err = ioutil.ReadAll(resp.Body)
+				if err != nil {
+					return bow.httpRequestComplete(req, resp, err)
+				}
+			} else {
+				bow.body = []byte(`<html></html>`)
+			}
 		}
 	}
+	return bow.httpRequestComplete(req, resp, nil)
+}
+
+func (bow *Browser) httpRequestComplete(req *http.Request, resp *http.Response, err error) error {
 	buff := bytes.NewBuffer(bow.body)
-	dom, err := goquery.NewDocumentFromReader(buff)
-	if err != nil {
-		return err
+	dom, erro := goquery.NewDocumentFromReader(buff)
+	if erro != nil {
+		err = erro
 	}
 
 	bow.history.Push(bow.state)
 	bow.state = jar.NewHistoryState(req, resp, dom)
 	bow.postSend()
 	bow.reloadCounter = 0
-	return nil
+	return err
 }
 
 // Solve CloudFlare
