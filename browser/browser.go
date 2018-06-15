@@ -48,6 +48,9 @@ var InitialAssetsSliceSize = 20
 
 // Browsable represents an HTTP web browser.
 type Browsable interface {
+	// GetUserAgent sets the user agent.
+	GetUserAgent() string
+
 	// SetUserAgent sets the user agent.
 	SetUserAgent(ua string)
 
@@ -524,6 +527,11 @@ func (bow *Browser) GetCookieJar() http.CookieJar {
 // SetUserAgent sets the user agent.
 func (bow *Browser) SetUserAgent(userAgent string) {
 	bow.userAgent = userAgent
+}
+
+// GetUserAgent gets the user agent.
+func (bow *Browser) GetUserAgent() string {
+	return bow.userAgent
 }
 
 // SetAttribute sets a browser instruction attribute.
