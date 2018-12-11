@@ -13,7 +13,7 @@ type Submittable interface {
 	Action() string
 	Input(name, value string) error
 	Click(button string) error
-	Submit() error
+	Submit(noclick string) error
 	Dom() *goquery.Selection
 }
 
@@ -98,8 +98,8 @@ func (f *Form) Input(name, value string) error {
 // Submit submits the form.
 // Clicks the first button in the form, or submits the form without using
 // any button when the form does not contain any buttons.
-func (f *Form) Submit() error {
-	if len(f.buttons) > 0 {
+func (f *Form) Submit(noclick string) error {
+	if noclick != "noclick" && len(f.buttons) > 0 {
 		for _, b := range f.buttons {
 			return f.Click(b.name)
 		}

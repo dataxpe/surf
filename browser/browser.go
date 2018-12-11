@@ -63,6 +63,9 @@ type Browsable interface {
 	// SetState sets the init browser state.
 	SetState(sj *jar.State)
 
+	// GetState gets the init browser state.
+	GetState() *jar.State
+
 	// SetBookmarksJar sets the bookmarks jar the browser uses.
 	SetBookmarksJar(bj jar.BookmarksJar)
 
@@ -514,6 +517,11 @@ func (bow *Browser) SetState(sj *jar.State) {
 	bow.state = sj
 }
 
+// GetState gets the browser state.
+func (bow *Browser) GetState() *jar.State {
+	return bow.state
+}
+
 // SetCookieJar is used to set the cookie jar the browser uses.
 func (bow *Browser) SetCookieJar(cj http.CookieJar) {
 	bow.cookies = cj
@@ -859,13 +867,13 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 		re2 := regexp.MustCompile("a\\.value = (parseInt\\(.+?\\)).+")
 		re3 := regexp.MustCompile("\\s{3,}[a-z](?: = |\\.).+")
 		re4 := regexp.MustCompile("[\\n\\\\']")
-	
+
 		js = re1.FindAllStringSubmatch(js, -1)[0][1]
 		js = re2.ReplaceAllString(js, re2.FindAllStringSubmatch(js, -1)[0][1])
 		js = re3.ReplaceAllString(js, "")
 		js = re4.ReplaceAllString(js, "")
 		js = strings.Replace(js, "return", "", -1)
-	
+
 		jsEngine := otto.New()
 		data, err := jsEngine.Eval(js)
 		if err != nil {
@@ -879,11 +887,11 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 		if err != nil {
 			return false
 		}
-	
+
 		jschlVc, _ := dom.Find("input[name=\"jschl_vc\"]").Attr("value")
 		pass, _ := dom.Find("input[name=\"pass\"]").Attr("value")
 		jschlAnswer := strconv.Itoa(int(checksum))
-	
+
 		u := rurl.Scheme + "://" + rurl.Host + "/cdn-cgi/l/chk_jschl"
 		ur, err := url.Parse(u)
 		q := ur.Query()
@@ -891,11 +899,11 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 		q.Add("pass", pass)
 		q.Add("jschl_answer", jschlAnswer)
 		ur.RawQuery = q.Encode()
-	
+
 		bow.DelRequestHeader("Cookie")
 		bow.DelRequestHeader("Referer")
 		bow.AddRequestHeader("Referer", rurl.String())
-	
+
 		cjar := bow.GetCookieJar()
 		cook := cjar.Cookies(rurl)
 		if cook != nil {
@@ -904,7 +912,7 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 			}
 		}
 		bow.Open(ur.String())
-	
+
 		if bow.refresh != nil {
 			bow.refresh.Stop()
 		}
@@ -918,7 +926,7 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 	re5 := regexp.MustCompile("a\\.value\\s*\\=")
 
 	js = re1.FindAllStringSubmatch(js, -1)[0][1]
-	js = strings.Replace(js, "s,t,o,p,b,r,e,a,k,i,n,g,f,", "s,t = \"" + host + "\",o,p,b,r,e,a,k,i,n,g,f,",1)
+	js = strings.Replace(js, "s,t,o,p,b,r,e,a,k,i,n,g,f,", "s,t = \""+host+"\",o,p,b,r,e,a,k,i,n,g,f,", 1)
 	js = re2.ReplaceAllString(js, "")
 	js = re3.ReplaceAllString(js, "")
 	js = re4.ReplaceAllString(js, "")
