@@ -858,7 +858,9 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 	}
 	buff := bytes.NewBuffer(body)
 	dom, err := goquery.NewDocumentFromReader(buff)
-
+	if err != nil {
+		return false
+	}
 	host := rurl.Host
 
 	js := dom.Find("script:contains(\"s,t,o,p,b,r,e,a,k,i,n,g\")").Text()
