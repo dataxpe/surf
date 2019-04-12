@@ -643,6 +643,11 @@ func (bow *Browser) Url() *url.URL {
 
 // StatusCode returns the response status code.
 func (bow *Browser) StatusCode() int {
+	if bow.state.Response == nil {
+		// there is a possibility that we issued a request, but for
+		// whatever reason the request failed.
+		return 503
+	}
 	return bow.state.Response.StatusCode
 }
 
@@ -763,6 +768,9 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 	if e, ok := err.(net.Error); ok && e.Timeout() {
 		bow.body = []byte(`<html></html>`)
 	} else if err != nil {
+		if strings.HasSuffix(err.Error(), "Service Unavailable") {
+			resp = &http.Response{StatusCode: 503, Request: req}
+		}
 		bow.body = []byte(`<html></html>`)
 		return bow.httpRequestComplete(req, resp, err)
 	}
@@ -772,12 +780,10 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 			d, _ := httputil.DumpRequest(req, false)
 			fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
 		}
-
 		if os.Getenv("SURF_DEBUG_HEADERS") != "" {
 			d, _ := httputil.DumpResponse(resp, false)
 			fmt.Fprintln(os.Stderr, "===== [DUMP] =====\n", string(d))
 		}
-
 		if resp.StatusCode == 503 && (resp.Header.Get("Server") == "cloudflare-nginx" || resp.Header.Get("Server") == "cloudflare") {
 			if !bow.solveCF(resp, req.URL) {
 				return bow.httpRequestComplete(req, resp, fmt.Errorf("Page protected with cloudflare with unknown algorythm"))
@@ -836,7 +842,6 @@ func (bow *Browser) httpRequestComplete(req *http.Request, resp *http.Response, 
 	if erro != nil {
 		err = erro
 	}
-
 	bow.history.Push(bow.state)
 	bow.state = jar.NewHistoryState(req, resp, dom)
 	bow.postSend()
