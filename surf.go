@@ -4,9 +4,9 @@ package surf
 import (
 	"net/http"
 
-	"github.com/Diggernaut/surf/agent"
-	"github.com/Diggernaut/surf/browser"
-	"github.com/Diggernaut/surf/jar"
+	"github.com/dataxpe/surf/agent"
+	"github.com/dataxpe/surf/browser"
+	"github.com/dataxpe/surf/jar"
 )
 
 var (

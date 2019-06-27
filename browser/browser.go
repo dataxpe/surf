@@ -2,6 +2,8 @@ package browser
 
 import (
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,8 +20,8 @@ import (
 
 	"github.com/Diggernaut/goquery"
 	"github.com/Diggernaut/mahonia"
-	"github.com/Diggernaut/surf/errors"
-	"github.com/Diggernaut/surf/jar"
+	"github.com/dataxpe/surf/errors"
+	"github.com/dataxpe/surf/jar"
 	"github.com/robertkrimen/otto"
 	"golang.org/x/net/html/charset"
 )
@@ -791,17 +793,31 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 			return nil
 		}
 
+		var reader io.Reader
+		switch resp.Header.Get("Content-Encoding") {
+		case "gzip":
+			reader, err = gzip.NewReader(resp.Body)
+			if err != nil {
+				return err
+			}
+		case "deflate":
+			reader = flate.NewReader(resp.Body)
+
+		default:
+			reader = resp.Body
+		}
+
 		contentType := resp.Header.Get("Content-Type")
 		if resp.StatusCode != 403 {
 			if contentType == "text/html; charset=GBK" {
 				enc := mahonia.NewDecoder("gbk")
-				e := enc.NewReader(resp.Body)
+				e := enc.NewReader(reader)
 				bow.body, err = ioutil.ReadAll(e)
 				if err != nil {
 					return bow.httpRequestComplete(req, resp, err)
 				}
 			} else if !bow.contentFix(contentType) {
-				fixedBody, err := charset.NewReader(resp.Body, contentType)
+				fixedBody, err := charset.NewReader(reader, contentType)
 				if err == nil {
 					bow.body, err = ioutil.ReadAll(fixedBody)
 					if err != nil {
@@ -824,7 +840,7 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 			bow.contentConversion(contentType, req.URL.String())
 		} else {
 			if resp.Body != nil {
-				bow.body, err = ioutil.ReadAll(resp.Body)
+				bow.body, err = ioutil.ReadAll(reader)
 				if err != nil {
 					return bow.httpRequestComplete(req, resp, err)
 				}
@@ -857,7 +873,23 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 	}
 
 	time.Sleep(time.Duration(4) * time.Second)
-	body, err := ioutil.ReadAll(resp.Body)
+
+	var reader io.Reader
+	var err error
+	switch resp.Header.Get("Content-Encoding") {
+	case "gzip":
+		reader, err = gzip.NewReader(resp.Body)
+		if err != nil {
+			return false
+		}
+	case "deflate":
+		reader = flate.NewReader(resp.Body)
+
+	default:
+		reader = resp.Body
+	}
+
+	body, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return false
 	}
