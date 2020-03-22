@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/headzoo/surf/agent"
-	"github.com/headzoo/surf/jar"
+	"github.com/dataxpe/surf/agent"
+	"github.com/dataxpe/surf/jar"
 )
 
 func newDefaultTestBrowser() *Browser {
