@@ -803,6 +803,9 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 			fmt.Fprintln(os.Stderr, "===== [DUMP Response] =====\n", resp.Request.RemoteAddr, string(d))
 		}
 		if resp.StatusCode == 503 && (resp.Header.Get("Server") == "cloudflare-nginx" || resp.Header.Get("Server") == "cloudflare") {
+			if bow.reloadCounter >= bow.maxReloads && bow.maxReloads > 0 || bow.maxReloads == 0 && bow.reloadCounter >= 3 {
+				return bow.httpRequestComplete(req, resp, fmt.Errorf("maximum retries (%d) for cloudflare reached",bow.reloadCounter))
+			}
 			if !bow.solveCF(resp, req.URL) {
 				if os.Getenv("SURF_DEBUG_CF") != "" {
 					fmt.Fprintln(os.Stderr, "Page protected with cloudflare with unknown algorythm")
@@ -891,6 +894,7 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 		// We are in deadloop
 		return false
 	}
+	bow.reloadCounter++
 
 	time.Sleep(time.Duration(4) * time.Second)
 
@@ -1075,9 +1079,13 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 			return false
 		}
 
-		if bow.refresh != nil {
+		/*if bow.StatusCode() != 200 {
+			return false
+		}*/
+
+		/*if bow.refresh != nil {
 			bow.refresh.Stop()
-		}
+		}*/
 		return true
 
 	}
