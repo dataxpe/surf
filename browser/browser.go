@@ -5,6 +5,7 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"fmt"
+	"github.com/andybalholm/brotli"
 	"html"
 	"io"
 	"io/ioutil"
@@ -824,6 +825,8 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 			}
 		case "deflate":
 			reader = flate.NewReader(resp.Body)
+		case "br":
+			reader = brotli.NewReader(resp.Body)
 
 		default:
 			reader = resp.Body
