@@ -1100,7 +1100,10 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 	re4 := regexp.MustCompile(";\\s*\\d+\\s*$")
 	re5 := regexp.MustCompile("a\\.value\\s*\\=")
 
-	js = re1.FindAllStringSubmatch(js, -1)[0][1]
+	//js = re1.FindAllStringSubmatch(js, -1)[0][1]
+	if jsRE := re1.FindAllStringSubmatch(js, -1); len(jsRE) > 0 {
+		js = jsRE[0][1]
+	}
 	js = strings.Replace(js, "s,t,o,p,b,r,e,a,k,i,n,g,f,", "s,t = \""+host+"\",o,p,b,r,e,a,k,i,n,g,f,", 1)
 	js = re2.ReplaceAllString(js, "")
 	js = re3.ReplaceAllString(js, "")
