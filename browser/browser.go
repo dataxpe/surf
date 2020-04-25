@@ -932,6 +932,15 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 		host = "torrentz2.eu"
 	}
 	js := dom.Find("script:contains(\"s,t,o,p,b,r,e,a,k,i,n,g\")").Text()
+	if js == "" {
+		js = dom.Find("script:contains(\"s,t,o,p, b,r,e,a,k,i,n,g\")").Text()
+		js = strings.Replace(js, "s,t,o,p, b,r,e,a,k,i,n,g","s,t,o,p,b,r,e,a,k,i,n,g", -1)
+	}
+	/*if js == "" {
+		if os.Getenv("SURF_DEBUG_CF") != "" {
+			fmt.Printf("---------- cant extract js -----------\n%s\n\n\n\n\n",body)
+		}
+	}*/
 	/* DEPRECATED
 	if strings.Contains(js, "parseInt") {
 		re1 := regexp.MustCompile("setTimeout\\(function\\(\\){\\s+(var s,t,o,p,b,r,e,a,k,i,n,g,f.+?\\r?\\n[\\s\\S]+?a\\.value =.+?)\\r?\\n")
@@ -1016,6 +1025,11 @@ func (bow *Browser) solveCF(resp *http.Response, rurl *url.URL) bool {
 		re4 := regexp.MustCompile("\\s';\\s121'$")
 		re5 := regexp.MustCompile("a\\.value\\s*\\=")
 
+		jsm := re1.FindAllStringSubmatch(js, -1)
+		if len(jsm) < 1 {
+			fmt.Printf("FindAllStringSubmatch error\n")
+			return false
+		}
 		js = re1.FindAllStringSubmatch(js, -1)[0][1]
 		js = strings.Replace(js, "s,t,o,p,b,r,e,a,k,i,n,g,f,", "s,t = \""+host+"\",o,p,b,r,e,a,k,i,n,g,f,", 1)
 		js = re2.ReplaceAllString(js, "")

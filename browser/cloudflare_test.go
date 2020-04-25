@@ -21,6 +21,10 @@ func TestCF02(t *testing.T) {
 	testCFrequest(t, "testdata/js_challenge_11_12_2019.html", "POST", "2.4164645335")
 }
 
+func TestCF03(t *testing.T) {
+	testCFrequest(t, "testdata/js_challenge_22_04_2020.html", "POST", "0.1807882014")
+}
+
 func testCFrequest(t *testing.T, page string, method string, jschl_answer string) {
 	cfpage, err := ioutil.ReadFile(page)
 	if err != nil {
